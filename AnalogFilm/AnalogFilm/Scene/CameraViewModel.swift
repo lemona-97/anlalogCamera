@@ -7,7 +7,6 @@
 //
 //
 
-import AVFoundation
 import Photos
 import RxCocoa
 import RxSwift
@@ -21,25 +20,22 @@ protocol CameraViewModelType: AnyObject {
 
 final class CameraViewModel: CameraViewModelType {
    let disposeBag = DisposeBag()
-   
-   private var session: AVCaptureSession? = nil
-   var previewLayer: AVCaptureVideoPreviewLayer? = nil
-   private var currentCamera: AVCaptureDevice?
-   private var currentCameraPosition: AVCaptureDevice.Position = .front
-   
-   
+      
+   private let startCameraRelay = PublishRelay<Void>()
    private let openingGalleryRelay = PublishRelay<Void>()
+   private let openingSettingToTurnOnCameraRelay = PublishRelay<Void>()
    
    // MARK: - Input
    struct Input {
+      let viewDidLoad: Signal<Void>
       let didTapGalleryButton: Signal<Void>
-      let didTapTakePhotoButton: Signal<Void>
-      let didTapChangeCameraButton: Signal<Void>
    }
    
    // MARK: - Output
    struct Output {
+      let startCamera: Signal<Void>
       let openingGallery: Signal<Void>
+      let goSettingToTurnOnCamera: Signal<Void>
    }
    
    // MARK: - Initializers
@@ -47,6 +43,11 @@ final class CameraViewModel: CameraViewModelType {
    }
    
    func transform(input: Input) -> Output {
+      input.viewDidLoad
+         .emit(with: self) { owner, _ in
+            owner.requestCameraAuthorization()
+         }.disposed(by: disposeBag)
+      
       input.didTapGalleryButton
          .emit(with: self) { owner, _ in
             if owner.checkGalleryAuthorization() {
@@ -56,7 +57,9 @@ final class CameraViewModel: CameraViewModelType {
       
       
       return Output(
-         openingGallery: openingGalleryRelay.asSignal()
+         startCamera: startCameraRelay.asSignal(),
+         openingGallery: openingGalleryRelay.asSignal(),
+         goSettingToTurnOnCamera: openingSettingToTurnOnCameraRelay.asSignal()
       )
    }
 }
@@ -96,14 +99,22 @@ private extension CameraViewModel {
    }
    
    func requestCameraAuthorization() {
-      
+      AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+         guard let self else { return }
+         if granted {
+            print("✅ 카메라 접근 허용됨")
+            startCameraSession()
+         } else {
+            print("❌ 카메라 접근 거부됨")
+            DispatchQueue.main.async { [weak self] in
+               guard let self else { return }
+               self.openingSettingToTurnOnCameraRelay.accept(())
+            }
+         }
+      }
    }
    
-   func takePhoto() {
-      
-   }
-   
-   func saveImage() {
-      
+   func startCameraSession() {
+      startCameraRelay.accept(())
    }
 }
