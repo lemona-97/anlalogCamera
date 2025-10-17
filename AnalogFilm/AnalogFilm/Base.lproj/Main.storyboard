@@ -132,7 +132,7 @@
                     <extendedEdge key="edgesForExtendedLayout" bottom="YES"/>
                     <nil key="simulatedTopBarMetrics"/>
                     <connections>
-                        <outlet property="cameraMagnificationLabel" destination="bDL-ma-JDU" id="qG3-sc-OZh"/>
+                        <outlet property="cameraMagnificationLabel" destination="bDL-ma-JDU" id="rPW-2m-1Sv"/>
                         <outlet property="changeCameraImageView" destination="ngY-ic-oIj" id="dZF-yt-s7H"/>
                         <outlet property="filteredImageView" destination="m5z-WL-doI" id="qY7-QU-oNI"/>
                         <outlet property="galleryBackgroundView" destination="9h1-eZ-F4v" id="JIG-Zq-VJ5"/>

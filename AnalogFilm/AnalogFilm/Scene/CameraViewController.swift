@@ -46,6 +46,8 @@ final class CameraViewController: UIViewController, UIImagePickerControllerDeleg
    }
    @IBOutlet weak var cameraMagnificationLabel: UILabel!
    
+   private let dateLabel =  UILabel()
+   
    // MARK: - Life Cycles
    override func viewDidLoad() {
       super.viewDidLoad()
@@ -57,6 +59,7 @@ final class CameraViewController: UIViewController, UIImagePickerControllerDeleg
 
 // MARK: - Private Methods
 private extension CameraViewController {
+   
    func startCameraSession() {
       let session = AVCaptureSession()
       session.sessionPreset = .photo
@@ -159,10 +162,12 @@ private extension CameraViewController {
    }
    
    func savePhotoToLibrary(_ image: UIImage) {
+      let imageWithDate = mergeDateLabel(into: image)
+      
       PHPhotoLibrary.requestAuthorization { status in
          if status == .authorized || status == .limited {
             PHPhotoLibrary.shared().performChanges({
-               PHAssetChangeRequest.creationRequestForAsset(from: image)
+               PHAssetChangeRequest.creationRequestForAsset(from: imageWithDate)
             }) { success, error in
                if let error = error {
                   print("사진 저장 실패: \(error.localizedDescription)")
@@ -174,6 +179,65 @@ private extension CameraViewController {
             print("사진 라이브러리 접근 권한이 없습니다.")
          }
       }
+   }
+   
+   func mergeDateLabel(into image: UIImage) -> UIImage {
+      UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+      
+      image.draw(in: CGRect(origin: .zero, size: image.size))
+      
+      // 현재 날짜를 "yyyy MM dd" 형식으로 표시
+      let formatter = DateFormatter()
+      formatter.dateFormat = "yyyy MM dd"
+      let dateText = formatter.string(from: Date())
+      
+      // 이미지뷰 -> 실제 이미지 비율 계산
+      let widthRatio = image.size.width / filteredImageView.bounds.width
+      let heightRatio = image.size.height / filteredImageView.bounds.height
+      
+      // 화면에서 17pt로 보이도록 폰트 크기 계산
+      let fontSize = 17 * min(widthRatio, heightRatio)
+      let font = UIFont(name: "AcademyEngravedLetPlain", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+      
+      // 색상 #DB7830 적용
+      let textColor = UIColor(red: 219/255, green: 120/255, blue: 48/255, alpha: 1.0)
+      
+      // 우측 정렬
+      let paragraphStyle = NSMutableParagraphStyle()
+      paragraphStyle.alignment = .right
+      
+      // 속성 적용
+      let attributes: [NSAttributedString.Key: Any] = [
+         .font: font,
+         .foregroundColor: textColor,
+         .paragraphStyle: paragraphStyle,
+         .shadow: {
+            let shadow = NSShadow()
+            shadow.shadowColor = UIColor.black
+            shadow.shadowBlurRadius = 2 * min(widthRatio, heightRatio)
+            return shadow
+         }()
+      ]
+      
+      // 텍스트 크기 계산
+      let textSize = dateText.size(withAttributes: attributes)
+      
+      // 우측 & 하단 16pt 패딩
+      let padding: CGFloat = 16 * min(widthRatio, heightRatio)
+      let textRect = CGRect(
+         x: image.size.width - textSize.width - padding,
+         y: image.size.height - textSize.height - padding,
+         width: textSize.width,
+         height: textSize.height
+      )
+      
+      // 이미지에 그리기
+      dateText.draw(in: textRect, withAttributes: attributes)
+      
+      let newImage = UIGraphicsGetImageFromCurrentImageContext()
+      UIGraphicsEndImageContext()
+      
+      return newImage ?? image
    }
 }
 
@@ -250,7 +314,11 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
          ciImage = ciImage.oriented(.upMirrored)
       }
       
-      let filtered = applyAnalogFilter(to: ciImage)
+      // 해상도 낮추기: scale 0.5
+      let scale: CGFloat = 0.5
+      let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+      
+      let filtered = applyAnalogFilter(to: scaledImage)
       
       guard let cgImage = ciContext.createCGImage(filtered, from: filtered.extent) else { return }
       let uiImage = UIImage(cgImage: cgImage)
@@ -273,7 +341,7 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
       colorControls.setValue(0.9, forKey: kCIInputSaturationKey)
       colorControls.setValue(0.05, forKey: kCIInputBrightnessKey)
       
-      // 톤 커브 (조금 페이드 느낌)
+      // 톤 커브
       curve.setValue(colorControls.outputImage, forKey: kCIInputImageKey)
       curve.setValue(CIVector(x: 0.0, y: 0.05), forKey: "inputPoint0")
       curve.setValue(CIVector(x: 0.25, y: 0.15), forKey: "inputPoint1")
@@ -281,27 +349,28 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
       curve.setValue(CIVector(x: 0.75, y: 0.85), forKey: "inputPoint3")
       curve.setValue(CIVector(x: 1.0, y: 1.0), forKey: "inputPoint4")
       
-      // 세피아 약하게 섞기 (따뜻한 빛)
+      // 세피아
       sepia.setValue(curve.outputImage, forKey: kCIInputImageKey)
       sepia.setValue(0.25, forKey: kCIInputIntensityKey)
       
-      // 비네팅 효과
+      // 비네팅
       vignette.setValue(sepia.outputImage, forKey: kCIInputImageKey)
       vignette.setValue(2.0, forKey: kCIInputIntensityKey)
       vignette.setValue(30.0, forKey: kCIInputRadiusKey)
       
-      // 랜덤 노이즈(그레인) 생성 후 오버레이
-      let grainImage = grain.outputImage?
+      // 랜덤 노이즈 그레인
+      let noiseImage = grain.outputImage!
          .cropped(to: image.extent)
          .applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
             "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
+            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
          ])
       
       let finalImage = vignette.outputImage?
          .applyingFilter("CISourceOverCompositing", parameters: [
-            kCIInputBackgroundImageKey: grainImage ?? image
+            kCIInputBackgroundImageKey: noiseImage
          ])
       
       return finalImage ?? image
@@ -353,6 +422,7 @@ private extension CameraViewController {
    func updateButtonRotation(with motion: CMDeviceMotion) {
       let roll = motion.attitude.roll
       
+      // roll 값을 degree로 변환
       // roll 값을 degree로 변환
       let degrees = roll * 180 / .pi
       let pitch = motion.attitude.pitch  * 180 / .pi
