@@ -43,6 +43,7 @@ final class CameraViewController: UIViewController, UIImagePickerControllerDeleg
    @IBAction func takePhotoButtonAction(_ sender: Any) {
       takePhotoButtonRelay.accept(())
    }
+   @IBOutlet weak var cameraMagnificationLabel: UILabel!
    
    // MARK: - Life Cycles
    override func viewDidLoad() {
@@ -196,8 +197,6 @@ private extension CameraViewController {
       takePhotoButtonRelay.bind(with: self) { owner, _ in
          owner.takePhoto()
       }.disposed(by: disposeBag)
-      
-      
    }
    
    func bind(for output: CameraViewModel.Output) {
@@ -261,36 +260,79 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
    }
    
    func applyAnalogFilter(to image: CIImage) -> CIImage {
-      guard let sepia = CIFilter(name: "CISepiaTone"),
-            let noise = CIFilter(name: "CINoiseReduction") else { return image }
-      
-      sepia.setValue(image, forKey: kCIInputImageKey)
-      sepia.setValue(0.5, forKey: kCIInputIntensityKey)
-      
-      noise.setValue(sepia.outputImage, forKey: kCIInputImageKey)
-      noise.setValue(0.02, forKey: "inputNoiseLevel")
-      
-      return noise.outputImage ?? image
+       guard let colorControls = CIFilter(name: "CIColorControls"),
+             let curve = CIFilter(name: "CIToneCurve"),
+             let vignette = CIFilter(name: "CIVignette"),
+             let sepia = CIFilter(name: "CISepiaTone"),
+             let grain = CIFilter(name: "CIRandomGenerator") else { return image }
+
+       // 대비, 채도, 밝기 조절
+       colorControls.setValue(image, forKey: kCIInputImageKey)
+       colorControls.setValue(1.15, forKey: kCIInputContrastKey)
+       colorControls.setValue(0.9, forKey: kCIInputSaturationKey)
+       colorControls.setValue(0.05, forKey: kCIInputBrightnessKey)
+       
+       // 톤 커브 (조금 페이드 느낌)
+       curve.setValue(colorControls.outputImage, forKey: kCIInputImageKey)
+       curve.setValue(CIVector(x: 0.0, y: 0.05), forKey: "inputPoint0")
+       curve.setValue(CIVector(x: 0.25, y: 0.15), forKey: "inputPoint1")
+       curve.setValue(CIVector(x: 0.5, y: 0.55), forKey: "inputPoint2")
+       curve.setValue(CIVector(x: 0.75, y: 0.85), forKey: "inputPoint3")
+       curve.setValue(CIVector(x: 1.0, y: 1.0), forKey: "inputPoint4")
+       
+       // 세피아 약하게 섞기 (따뜻한 빛)
+       sepia.setValue(curve.outputImage, forKey: kCIInputImageKey)
+       sepia.setValue(0.25, forKey: kCIInputIntensityKey)
+       
+       // 비네팅 효과
+       vignette.setValue(sepia.outputImage, forKey: kCIInputImageKey)
+       vignette.setValue(2.0, forKey: kCIInputIntensityKey)
+       vignette.setValue(30.0, forKey: kCIInputRadiusKey)
+       
+       // 랜덤 노이즈(그레인) 생성 후 오버레이
+       let grainImage = grain.outputImage?
+           .cropped(to: image.extent)
+           .applyingFilter("CIColorMatrix", parameters: [
+               "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
+               "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
+               "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
+           ])
+       
+       let finalImage = vignette.outputImage?
+           .applyingFilter("CISourceOverCompositing", parameters: [
+               kCIInputBackgroundImageKey: grainImage ?? image
+           ])
+       
+       return finalImage ?? image
    }
 }
 
 extension CameraViewController: AVCapturePhotoCaptureDelegate {
    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-      if let error = error {
-         print("Error capturing photo: \(error.localizedDescription)")
-         return
-      }
-      
-      guard let imageData = photo.fileDataRepresentation(),
-            let image = UIImage(data: imageData) else {
-         print("Failed to get image from photo data")
-         return
-      }
-      
-      DispatchQueue.main.async { [weak self] in
-         self?.filteredImageView.image = image
-         self?.savePhotoToLibrary(image)
-      }
+       if let error = error {
+           print("Error capturing photo: \(error.localizedDescription)")
+           return
+       }
+       
+       guard let imageData = photo.fileDataRepresentation(),
+             let image = UIImage(data: imageData),
+             let ciImage = CIImage(data: imageData) else {
+           print("Failed to get image from photo data")
+           return
+       }
+       
+       let filteredCIImage = applyAnalogFilter(to: ciImage)
+       guard let cgImage = ciContext.createCGImage(filteredCIImage, from: filteredCIImage.extent) else {
+           print("필터 적용 이미지 변환 실패")
+           return
+       }
+       
+       let filteredUIImage = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+       
+       DispatchQueue.main.async { [weak self] in
+           self?.filteredImageView.image = filteredUIImage
+           self?.savePhotoToLibrary(filteredUIImage) // ✅ 필터 적용된 사진 저장
+       }
    }
 }
 
@@ -307,13 +349,25 @@ private extension CameraViewController {
    }
    
    func updateButtonRotation(with motion: CMDeviceMotion) {
-       // Roll: 장치를 좌우로 기울이는 값 (-π ~ π)
        let roll = motion.attitude.roll
 
-       // 버튼을 반대로 회전시켜서 항상 수평으로 유지
-       let rotationAngle = -CGFloat(roll)
-       
-       UIView.animate(withDuration: 0.1) {
+       // roll 값을 degree로 변환
+       let degrees = roll * 180 / .pi
+
+       var rotationAngle: CGFloat = 0
+
+      // ±45도 기준으로 세 구간만 처리
+       if degrees > 50 {
+           rotationAngle = -.pi / 2  // 왼쪽으로
+       } else if degrees < -50 {
+           rotationAngle = .pi / 2   // 오른쪽으로
+       } else {
+           rotationAngle = 0         // 가운데(수평)
+       }
+
+       UIView.animate(withDuration: 0.1) { [weak self] in
+           guard let self else { return }
+           self.cameraMagnificationLabel.transform = CGAffineTransform(rotationAngle: rotationAngle)
            self.changeCameraImageView.transform = CGAffineTransform(rotationAngle: rotationAngle)
            self.galleryImageView.transform = CGAffineTransform(rotationAngle: rotationAngle)
        }
