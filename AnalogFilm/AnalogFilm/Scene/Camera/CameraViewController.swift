@@ -316,7 +316,7 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
       let scale: CGFloat = 0.5
       let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
       
-      let filtered = applyAnalogFilter(to: scaledImage)
+      let filtered = FilterManager.applyAnalogFilter(to: scaledImage)
       
       guard let cgImage = ciContext.createCGImage(filtered, from: filtered.extent) else { return }
       let uiImage = UIImage(cgImage: cgImage)
@@ -324,54 +324,6 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
       DispatchQueue.main.async { [weak self] in
          self?.filteredImageView.image = uiImage
       }
-   }
-   
-   func applyAnalogFilter(to image: CIImage) -> CIImage {
-      guard let colorControls = CIFilter(name: "CIColorControls"),
-            let curve = CIFilter(name: "CIToneCurve"),
-            let vignette = CIFilter(name: "CIVignette"),
-            let sepia = CIFilter(name: "CISepiaTone"),
-            let grain = CIFilter(name: "CIRandomGenerator") else { return image }
-      
-      // 대비, 채도, 밝기 조절
-      colorControls.setValue(image, forKey: kCIInputImageKey)
-      colorControls.setValue(1.15, forKey: kCIInputContrastKey)
-      colorControls.setValue(0.9, forKey: kCIInputSaturationKey)
-      colorControls.setValue(0.05, forKey: kCIInputBrightnessKey)
-      
-      // 톤 커브
-      curve.setValue(colorControls.outputImage, forKey: kCIInputImageKey)
-      curve.setValue(CIVector(x: 0.0, y: 0.05), forKey: "inputPoint0")
-      curve.setValue(CIVector(x: 0.25, y: 0.15), forKey: "inputPoint1")
-      curve.setValue(CIVector(x: 0.5, y: 0.55), forKey: "inputPoint2")
-      curve.setValue(CIVector(x: 0.75, y: 0.85), forKey: "inputPoint3")
-      curve.setValue(CIVector(x: 1.0, y: 1.0), forKey: "inputPoint4")
-      
-      // 세피아
-      sepia.setValue(curve.outputImage, forKey: kCIInputImageKey)
-      sepia.setValue(0.25, forKey: kCIInputIntensityKey)
-      
-      // 비네팅
-      vignette.setValue(sepia.outputImage, forKey: kCIInputImageKey)
-      vignette.setValue(2.0, forKey: kCIInputIntensityKey)
-      vignette.setValue(30.0, forKey: kCIInputRadiusKey)
-      
-      // 랜덤 노이즈 그레인
-      let noiseImage = grain.outputImage!
-         .cropped(to: image.extent)
-         .applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
-            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0.05),
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
-         ])
-      
-      let finalImage = vignette.outputImage?
-         .applyingFilter("CISourceOverCompositing", parameters: [
-            kCIInputBackgroundImageKey: noiseImage
-         ])
-      
-      return finalImage ?? image
    }
 }
 
@@ -389,7 +341,7 @@ extension CameraViewController: AVCapturePhotoCaptureDelegate {
          return
       }
       
-      let filteredCIImage = applyAnalogFilter(to: ciImage)
+      let filteredCIImage = FilterManager.applyAnalogFilter(to: ciImage)
       guard let cgImage = ciContext.createCGImage(filteredCIImage, from: filteredCIImage.extent) else {
          print("필터 적용 이미지 변환 실패")
          return
