@@ -186,7 +186,7 @@ private extension CameraViewController {
       
       // 현재 날짜를 "yyyy MM dd" 형식으로 표시
       let formatter = DateFormatter()
-      formatter.dateFormat = "yyyy MM dd"
+      formatter.dateFormat = "yyMMdd"
       let dateText = formatter.string(from: Date())
       
       // 이미지뷰 -> 실제 이미지 비율 계산
