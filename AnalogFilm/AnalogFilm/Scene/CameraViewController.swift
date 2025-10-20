@@ -45,9 +45,7 @@ final class CameraViewController: UIViewController, UIImagePickerControllerDeleg
       takePhotoButtonRelay.accept(())
    }
    @IBOutlet weak var cameraMagnificationLabel: UILabel!
-   
-   private let dateLabel =  UILabel()
-   
+      
    // MARK: - Life Cycles
    override func viewDidLoad() {
       super.viewDidLoad()
@@ -195,9 +193,9 @@ private extension CameraViewController {
       let widthRatio = image.size.width / filteredImageView.bounds.width
       let heightRatio = image.size.height / filteredImageView.bounds.height
       
-      // 화면에서 17pt로 보이도록 폰트 크기 계산
-      let fontSize = 17 * min(widthRatio, heightRatio)
-      let font = UIFont(name: "AcademyEngravedLetPlain", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+      // 화면에서 15pt로 보이도록 폰트 크기 계산
+      let fontSize = 15 * min(widthRatio, heightRatio)
+      let font = UIFont(name: "DigitalNumbers-Regular", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
       
       // 색상 #DB7830 적용
       let textColor = UIColor(red: 219/255, green: 120/255, blue: 48/255, alpha: 1.0)

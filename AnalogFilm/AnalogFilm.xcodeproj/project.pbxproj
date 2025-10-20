@@ -163,6 +163,7 @@
 				DEVELOPMENT_TEAM = WJVGRM2SN6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AnalogFilm/Base/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "쌔-카메라";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_NSCameraUsageDescription = "사진촬영을 위해 카메라 접근 권한이 필요합니다";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "촬영된 사진 확인을 위해 사진 접근 권한이 필요합니다.";
@@ -203,6 +204,7 @@
 				DEVELOPMENT_TEAM = WJVGRM2SN6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AnalogFilm/Base/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "쌔-카메라";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_NSCameraUsageDescription = "사진촬영을 위해 카메라 접근 권한이 필요합니다";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "촬영된 사진 확인을 위해 사진 접근 권한이 필요합니다.";
